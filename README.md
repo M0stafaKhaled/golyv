@@ -1,66 +1,180 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Golyv – Bus Trips & Seat Booking API (Laravel)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Repository: https://github.com/M0stafaKhaled/golyv
 
-## About Laravel
+A clean Laravel API that manages inter-station trips, ordered trip stops, buses and seats, with safe seat booking between two stations on a trip and querying available seats for a segment.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Key Features
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Stations CRUD (Admin)
+- Trips CRUD (start/end stations) with ordered intermediate stations
+- Manage trip stations order (add/update/remove/reorder)
+- Buses CRUD per trip
+- Seats CRUD per bus
+- Book a seat between two stations on a specific trip (conflict-safe)
+- Query available seats for a trip segment
+- SQLite ready for local development (zero config)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Tech Stack
 
-## Learning Laravel
+- PHP 8.2+, Laravel (Framework)
+- Database: SQLite (default), can switch to MySQL/Postgres
+- Dev tooling: Artisan, Composer, Vite (optional)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Project Structure (high level)
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- app/Models: Station, Trip, TripStation, Bus, BusSeat, Booking
+- app/Http/Controllers: StationController, TripController, TripStationController, BusController, BusSeatController, BookingController
+- app/Services: BookingService, AvailableSeatsService
+- app/Data: BookSeatData, AvailableSeatsData
+- routes/api.php: All API routes
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Data Model (relations & constraints)
 
-## Laravel Sponsors
+- Station has many TripStations; belongsToMany Trips through trip_stations (with pivot `order`)
+- Trip belongsTo startStation, endStation (Station); hasMany TripStations (ordered), hasMany Buses
+- TripStation belongsTo Trip and Station
+  - Unique per trip: (trip_id, station_id)
+  - Unique station order per trip: (trip_id, order)
+- Bus belongsTo Trip; hasMany BusSeats
+- BusSeat belongsTo Bus
+  - Unique seat per bus: (bus_id, seat_number)
+- Booking belongsTo Trip and BusSeat
+  - Stores from_order and to_order derived from the trip stations ordering
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Booking Logic (conflict-safe)
 
-### Premium Partners
+- When booking, the system locks records in a DB transaction, derives `from_order` and `to_order` from the trip’s station ordering, and rejects overlaps using strict segment overlap:
+  - Overlap condition: (existing.from_order < new.to_order) AND (existing.to_order > new.from_order)
+- Prevents double-booking the same seat across overlapping segments.
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## Getting Started
 
-## Contributing
+### Prerequisites
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- PHP 8.2+
+- Composer
+- SQLite (bundled), or MySQL/Postgres if preferred
+- Node.js (optional; not needed for API only)
 
-## Code of Conduct
+### Installation
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1) Clone
+- git clone https://github.com/M0stafaKhaled/golyv.git
+- cd golyv
 
-## Security Vulnerabilities
+2) Install dependencies
+- composer install
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+3) Configure environment
+- cp .env.example .env
+- Set APP_KEY and database
+  - php artisan key:generate
+  - For SQLite (recommended local):
+    - In .env: DB_CONNECTION=sqlite
+    - Ensure DB_DATABASE points to database/database.sqlite (or comment host/user/pass)
+    - Create the file:
+      - Windows PowerShell: New-Item -ItemType File .\database\database.sqlite -Force
+      - CMD: type nul > database\database.sqlite
+
+4) Migrate and seed
+- php artisan migrate --seed
+
+5) Run the server
+- php artisan serve
+- API base URL: http://127.0.0.1:8000/api
+
+## API Overview
+
+Unless stated, all endpoints are public for local development. The /api/user route uses Sanctum if you enable auth.
+
+### Stations
+
+- GET    /api/stations
+- POST   /api/stations { name }
+- GET    /api/stations/{station}
+- PUT    /api/stations/{station} { name }
+- DELETE /api/stations/{station}
+
+### Trips
+
+- GET    /api/trips
+- POST   /api/trips { name, start_station_id, end_station_id, stations?: [ { station_id, order? } ] }
+- GET    /api/trips/{trip}
+- PUT    /api/trips/{trip} { name?, start_station_id?, end_station_id? }
+- DELETE /api/trips/{trip}
+
+Notes:
+- On create, you may pass an optional stations array to initialize trip stops and their order. If order is omitted it auto-increments.
+
+### Trip Stations (manage stops for a trip)
+
+- GET    /api/trips/{trip}/stations
+- POST   /api/trips/{trip}/stations { station_id, order? }
+- PUT    /api/trips/{trip}/stations/{station} { station_id?, order? }
+- DELETE /api/trips/{trip}/stations/{station}
+- POST   /api/trips/{trip}/stations/reorder { items: [ { id, order }, ... ] }
+
+### Buses
+
+- GET    /api/trips/{trip}/buses
+- POST   /api/trips/{trip}/buses { total_seats }
+- GET    /api/buses/{bus}
+- PUT    /api/buses/{bus} { total_seats? }
+- DELETE /api/buses/{bus}
+
+### Bus Seats
+
+- GET    /api/buses/{bus}/seats
+- POST   /api/buses/{bus}/seats { seat_number }
+- GET    /api/seats/{seat}
+- PUT    /api/seats/{seat} { seat_number? }
+- DELETE /api/seats/{seat}
+
+### Booking
+
+- POST   /api/book-seat
+  - Body: { trip_id, seat_id, from_station_id, to_station_id, user_id? }
+  - Response: { message, booking }
+- GET    /api/trips/{trip}/available-seats?from_station_id=..&to_station_id=..
+  - Response: { message, seats: [ ...bus seats not overlapping segment... ] }
+
+## Example Requests
+
+Create a station
+- curl -X POST http://127.0.0.1:8000/api/stations -H "Content-Type: application/json" -d '{"name":"Cairo"}'
+
+Create a trip
+- curl -X POST http://127.0.0.1:8000/api/trips -H "Content-Type: application/json" -d '{"name":"Cairo-Alex","start_station_id":1,"end_station_id":2,"stations":[{"station_id":1,"order":1},{"station_id":3,"order":2},{"station_id":2,"order":3}]}'
+
+Add a bus for the trip
+- curl -X POST http://127.0.0.1:8000/api/trips/1/buses -H "Content-Type: application/json" -d '{"total_seats":12}'
+
+Create seats for a bus (repeat with different seat_number)
+- curl -X POST http://127.0.0.1:8000/api/buses/1/seats -H "Content-Type: application/json" -d '{"seat_number":1}'
+
+Check available seats for a segment
+- curl "http://127.0.0.1:8000/api/trips/1/available-seats?from_station_id=1&to_station_id=3"
+
+Book a seat for a segment
+- curl -X POST http://127.0.0.1:8000/api/book-seat -H "Content-Type: application/json" -d '{"trip_id":1,"seat_id":1,"from_station_id":1,"to_station_id":3}'
+
+## Error Handling
+
+- Validation: 422 with validation errors
+- Business rules (e.g., invalid station range, overlap seat booking): 422 with error message
+
+## Development Tips
+
+- List routes: php artisan route:list
+- Clear caches if classes/routes change: composer dump-autoload && php artisan optimize:clear (run commands separately in PowerShell)
+- Factories and seeders are available for quick sample data
+
+## Switching Databases
+
+- For MySQL/Postgres, update .env DB_* variables and run php artisan migrate --seed
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- See repository for license details. If none provided, assume internal use.
+
